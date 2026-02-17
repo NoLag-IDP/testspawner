@@ -1,0 +1,37 @@
+-- Escape Tsunami - Brainrot DEBUG SCANNER
+-- Run this first to see what the brainrots actually are in F9
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local assetsFolder = ReplicatedStorage:WaitForChild("Assets", 5)
+if not assetsFolder then
+	warn("ReplicatedStorage.Assets NOT FOUND")
+	return
+end
+
+local brainrotsFolder = assetsFolder:WaitForChild("Brainrots", 5)
+if not brainrotsFolder then
+	warn("ReplicatedStorage.Assets.Brainrots NOT FOUND")
+	return
+end
+
+print("=== BRAINROT SCAN ===")
+print("Rarity folders found: " .. #brainrotsFolder:GetChildren())
+
+for _, rarityFolder in ipairs(brainrotsFolder:GetChildren()) do
+	print("\n--- Rarity: " .. rarityFolder.Name .. " (" .. rarityFolder.ClassName .. ") ---")
+	for _, brainrot in ipairs(rarityFolder:GetChildren()) do
+		print("  Brainrot: [" .. brainrot.ClassName .. "] " .. brainrot.Name)
+		-- Print all children and their classes
+		for _, child in ipairs(brainrot:GetChildren()) do
+			print("    Child: [" .. child.ClassName .. "] " .. child.Name)
+			-- If it has children, go one more level
+			for _, subchild in ipairs(child:GetChildren()) do
+				print("      SubChild: [" .. subchild.ClassName .. "] " .. subchild.Name)
+			end
+		end
+	end
+end
+
+print("\n=== SCAN COMPLETE ===")
+print("Copy this output and send it!")
