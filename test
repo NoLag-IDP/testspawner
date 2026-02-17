@@ -1,0 +1,232 @@
+--// 🧠 Escape Tsunami - Brainrot Spawner (WindUI)
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local StarterGui = game:GetService("StarterGui")
+
+--------------------------------------------------------
+-- NOTIFICATION
+--------------------------------------------------------
+local function showNotification(title, message)
+	StarterGui:SetCore("SendNotification", {
+		Title = title;
+		Text = message;
+		Duration = 4;
+	})
+end
+
+--------------------------------------------------------
+-- SPAWN LOGIC
+--------------------------------------------------------
+local function getOrCreateFolder()
+	local folder = Workspace:FindFirstChild("Brainrots")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "Brainrots"
+		folder.Parent = Workspace
+	end
+	return folder
+end
+
+local function spawnBrainrot(name, weight, level, mutation)
+	if not name or name == "" then
+		return false, "Name is required!"
+	end
+	if not tonumber(weight) then
+		return false, "Weight must be a number!"
+	end
+	if not tonumber(level) then
+		return false, "Level must be a number!"
+	end
+
+	local folder = getOrCreateFolder()
+
+	local brainrotModel = Instance.new("Model")
+	brainrotModel.Name = name
+	brainrotModel.Parent = folder
+
+	local rootPart = Instance.new("Part")
+	rootPart.Name = "HumanoidRootPart"
+	rootPart.Size = Vector3.new(2, 2, 1)
+	rootPart.BrickColor = BrickColor.Random()
+	rootPart.Anchored = true
+	rootPart.Position = Vector3.new(
+		math.random(-20, 20),
+		5,
+		math.random(-20, 20)
+	)
+	rootPart.Parent = brainrotModel
+	brainrotModel.PrimaryPart = rootPart
+
+	-- Name tag above brainrot
+	local billboardGui = Instance.new("BillboardGui")
+	billboardGui.Size = UDim2.new(0, 180, 0, 60)
+	billboardGui.StudsOffset = Vector3.new(0, 2.5, 0)
+	billboardGui.AlwaysOnTop = true
+	billboardGui.Parent = rootPart
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = name
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextSize = 14
+	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	nameLabel.TextStrokeTransparency = 0
+	nameLabel.Parent = billboardGui
+
+	local infoLabel = Instance.new("TextLabel")
+	infoLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	infoLabel.Position = UDim2.new(0, 0, 0.5, 0)
+	infoLabel.BackgroundTransparency = 1
+	infoLabel.Text = "Lv." .. level .. "  |  Wt." .. weight .. "  |  " .. mutation
+	infoLabel.Font = Enum.Font.Gotham
+	infoLabel.TextSize = 11
+	infoLabel.TextColor3 = Color3.fromRGB(180, 200, 255)
+	infoLabel.TextStrokeTransparency = 0
+	infoLabel.Parent = billboardGui
+
+	-- Store as attributes
+	brainrotModel:SetAttribute("BrainrotName", name)
+	brainrotModel:SetAttribute("Weight", tonumber(weight))
+	brainrotModel:SetAttribute("Level", tonumber(level))
+	brainrotModel:SetAttribute("Mutation", mutation)
+
+	return true, "Spawned " .. name .. " in Workspace > Brainrots!"
+end
+
+--------------------------------------------------------
+-- WIND UI SETUP
+--------------------------------------------------------
+local Window = WindUI:CreateWindow({
+	Title = "Brainrot Spawner",
+	Icon = "brain",
+	Author = "Escape Tsunami",
+	Folder = "ETSpawner",
+	Size = UDim2.fromOffset(380, 440),
+	Titlebar = true,
+	Theme = "Dark",
+})
+
+local Tabs = {
+	Main = Window:Tab({ Title = "Spawn", Icon = "plus-circle" }),
+	Info = Window:Tab({ Title = "Info",  Icon = "info" }),
+}
+
+-- =====================================================
+-- MAIN TAB
+-- =====================================================
+local nameValue     = ""
+local weightValue   = ""
+local levelValue    = ""
+local mutationValue = "None"
+
+Tabs.Main:Section({ Title = "Brainrot Details" })
+
+Tabs.Main:Input({
+	Title   = "Brainrot Name",
+	Desc    = "Enter the name of the brainrot",
+	Placeholder = "e.g. Tralalero Tralala",
+	Callback = function(val)
+		nameValue = val
+	end,
+})
+
+Tabs.Main:Input({
+	Title   = "Weight",
+	Desc    = "Brainrot weight value",
+	Placeholder = "e.g. 100",
+	Callback = function(val)
+		weightValue = val
+	end,
+})
+
+Tabs.Main:Input({
+	Title   = "Level",
+	Desc    = "Brainrot level",
+	Placeholder = "e.g. 50",
+	Callback = function(val)
+		levelValue = val
+	end,
+})
+
+Tabs.Main:Dropdown({
+	Title   = "Mutation",
+	Desc    = "Select the brainrot's mutation",
+	List    = {
+		"None",
+		"Shiny",
+		"Cosmic",
+		"Radiant",
+		"Corruption",
+		"Divine",
+		"Celestial",
+		"Void",
+		"Eclipse",
+		"Aurora",
+	},
+	Callback = function(val)
+		mutationValue = val
+	end,
+})
+
+Tabs.Main:Section({ Title = "Actions" })
+
+Tabs.Main:Button({
+	Title = "Spawn Brainrot",
+	Desc  = "Spawns the brainrot into Workspace > Brainrots",
+	Callback = function()
+		-- Validate inputs
+		if nameValue == "" then
+			showNotification("Missing Field", "Please enter a brainrot name!")
+			return
+		end
+		if weightValue == "" or not tonumber(weightValue) then
+			showNotification("Invalid Weight", "Weight must be a valid number!")
+			return
+		end
+		if levelValue == "" or not tonumber(levelValue) then
+			showNotification("Invalid Level", "Level must be a valid number!")
+			return
+		end
+
+		local success, message = spawnBrainrot(nameValue, weightValue, levelValue, mutationValue)
+
+		if success then
+			showNotification("✓ Spawned!", message)
+		else
+			showNotification("✗ Error", message)
+		end
+	end,
+})
+
+Tabs.Main:Button({
+	Title = "Clear All Brainrots",
+	Desc  = "Removes all brainrots from Workspace > Brainrots",
+	Callback = function()
+		local folder = Workspace:FindFirstChild("Brainrots")
+		if folder then
+			folder:ClearAllChildren()
+			showNotification("Cleared", "All brainrots removed from Workspace!")
+		else
+			showNotification("Nothing to Clear", "No Brainrots folder found.")
+		end
+	end,
+})
+
+-- =====================================================
+-- INFO TAB
+-- =====================================================
+Tabs.Info:Section({ Title = "How to Use" })
+
+Tabs.Info:Label({ Title = "1. Go to the Spawn tab" })
+Tabs.Info:Label({ Title = "2. Fill in Name, Weight, Level & Mutation" })
+Tabs.Info:Label({ Title = "3. Press Spawn Brainrot" })
+Tabs.Info:Label({ Title = "4. Find your brainrot in Workspace > Brainrots" })
+
+Tabs.Info:Section({ Title = "Notes" })
+
+Tabs.Info:Label({ Title = "Weight & Level must be numbers" })
+Tabs.Info:Label({ Title = "Mutation defaults to None if not changed" })
+Tabs.Info:Label({ Title = "Use Clear All to remove spawned brainrots" })
