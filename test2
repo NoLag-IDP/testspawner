@@ -1,0 +1,287 @@
+--// 🧠 Escape Tsunami - Brainrot Spawner (WindUI)
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
+
+--------------------------------------------------------
+-- NOTIFICATION
+--------------------------------------------------------
+local function showNotification(title, message)
+	StarterGui:SetCore("SendNotification", {
+		Title = title;
+		Text = message;
+		Duration = 4;
+	})
+end
+
+--------------------------------------------------------
+-- SCAN BRAINROTS FROM KNOWN PATH
+-- ReplicatedStorage > Assets > Brainrots > [Rarity] > [Brainrot]
+--------------------------------------------------------
+local function scanBrainrots()
+	local list = {}       -- { name = "...", rarity = "...", object = ref }
+	local nameList = {}   -- just names for the dropdown
+
+	local assetsFolder = ReplicatedStorage:FindFirstChild("Assets")
+	if not assetsFolder then
+		warn("[Brainrot Spawner] Could not find ReplicatedStorage.Assets!")
+		return list, nameList
+	end
+
+	local brainrotsFolder = assetsFolder:FindFirstChild("Brainrots")
+	if not brainrotsFolder then
+		warn("[Brainrot Spawner] Could not find ReplicatedStorage.Assets.Brainrots!")
+		return list, nameList
+	end
+
+	-- Iterate rarity folders
+	for _, rarityFolder in ipairs(brainrotsFolder:GetChildren()) do
+		if rarityFolder:IsA("Folder") then
+			for _, brainrot in ipairs(rarityFolder:GetChildren()) do
+				table.insert(list, {
+					name   = brainrot.Name,
+					rarity = rarityFolder.Name,
+					object = brainrot,
+				})
+				table.insert(nameList, brainrot.Name)
+			end
+		end
+	end
+
+	-- Sort alphabetically
+	table.sort(list, function(a, b) return a.name < b.name end)
+	table.sort(nameList, function(a, b) return a < b end)
+
+	print("[Brainrot Spawner] Found " .. #list .. " brainrots across " .. #brainrotsFolder:GetChildren() .. " rarities.")
+	return list, nameList
+end
+
+local brainrotData, brainrotNames = scanBrainrots()
+
+-- Build a lookup table name -> entry for quick access
+local brainrotLookup = {}
+for _, entry in ipairs(brainrotData) do
+	brainrotLookup[entry.name] = entry
+end
+
+--------------------------------------------------------
+-- SPAWN LOGIC
+--------------------------------------------------------
+local function getOrCreateFolder()
+	local folder = Workspace:FindFirstChild("Brainrots")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "Brainrots"
+		folder.Parent = Workspace
+	end
+	return folder
+end
+
+local function spawnBrainrot(name, level)
+	if not name or name == "" then
+		return false, "No brainrot selected!"
+	end
+	if not tonumber(level) or tonumber(level) < 1 then
+		return false, "Level must be a valid number (min 1)!"
+	end
+
+	local entry = brainrotLookup[name]
+	if not entry then
+		return false, "Brainrot not found in data!"
+	end
+
+	local folder = getOrCreateFolder()
+
+	-- Clone directly from the real game asset
+	pcall(function() entry.object.Archivable = true end)
+	for _, v in ipairs(entry.object:GetDescendants()) do
+		pcall(function() v.Archivable = true end)
+	end
+
+	local ok, cloned = pcall(function()
+		return entry.object:Clone()
+	end)
+
+	if not ok or not cloned then
+		return false, "Failed to clone " .. name .. "! It may be protected."
+	end
+
+	-- Position near player
+	local char = Players.LocalPlayer.Character
+	local spawnPos = Vector3.new(math.random(-20, 20), 5, math.random(-20, 20))
+	if char and char.PrimaryPart then
+		local cp = char.PrimaryPart.Position
+		spawnPos = Vector3.new(cp.X + math.random(-10, 10), cp.Y + 2, cp.Z + math.random(-10, 10))
+	end
+
+	pcall(function()
+		if cloned:IsA("Model") and cloned.PrimaryPart then
+			cloned:PivotTo(CFrame.new(spawnPos))
+		elseif cloned:IsA("BasePart") then
+			cloned.Position = spawnPos
+		end
+	end)
+
+	-- Set attributes
+	cloned:SetAttribute("Level",  tonumber(level))
+	cloned:SetAttribute("Rarity", entry.rarity)
+
+	cloned.Parent = folder
+
+	-- Add billboard nametag
+	local rootPart = nil
+	if cloned:IsA("Model") then
+		rootPart = cloned.PrimaryPart or cloned:FindFirstChildWhichIsA("BasePart")
+	elseif cloned:IsA("BasePart") then
+		rootPart = cloned
+	end
+
+	if rootPart then
+		local existing = rootPart:FindFirstChildOfClass("BillboardGui")
+		if existing then existing:Destroy() end
+
+		local billboard = Instance.new("BillboardGui")
+		billboard.Size = UDim2.new(0, 200, 0, 55)
+		billboard.StudsOffset = Vector3.new(0, 3.5, 0)
+		billboard.AlwaysOnTop = true
+		billboard.Parent = rootPart
+
+		local nameLabel = Instance.new("TextLabel")
+		nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+		nameLabel.BackgroundTransparency = 1
+		nameLabel.Text = name
+		nameLabel.Font = Enum.Font.GothamBold
+		nameLabel.TextSize = 14
+		nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		nameLabel.TextStrokeTransparency = 0
+		nameLabel.Parent = billboard
+
+		local infoLabel = Instance.new("TextLabel")
+		infoLabel.Size = UDim2.new(1, 0, 0.5, 0)
+		infoLabel.Position = UDim2.new(0, 0, 0.5, 0)
+		infoLabel.BackgroundTransparency = 1
+		infoLabel.Text = "Lv." .. level .. "  •  " .. entry.rarity
+		infoLabel.Font = Enum.Font.Gotham
+		infoLabel.TextSize = 11
+		infoLabel.TextColor3 = Color3.fromRGB(160, 210, 255)
+		infoLabel.TextStrokeTransparency = 0
+		infoLabel.Parent = billboard
+	end
+
+	return true, "Spawned " .. name .. " (Lv." .. level .. ") [" .. entry.rarity .. "]"
+end
+
+--------------------------------------------------------
+-- WIND UI
+--------------------------------------------------------
+local Window = WindUI:CreateWindow({
+	Title   = "Brainrot Spawner",
+	Icon    = "brain",
+	Author  = "Escape Tsunami",
+	Folder  = "ETSpawner",
+	Size    = UDim2.fromOffset(380, 380),
+	Titlebar = true,
+	Theme   = "Dark",
+})
+
+local Tabs = {
+	Main = Window:Tab({ Title = "Spawn", Icon = "plus-circle" }),
+	Info = Window:Tab({ Title = "Info",  Icon = "info" }),
+}
+
+-- =====================================================
+-- MAIN TAB
+-- =====================================================
+local selectedBrainrot = brainrotNames[1] or ""
+local levelValue = "1"
+
+-- Show rarity of selected brainrot in section title dynamically via label
+Tabs.Main:Section({ Title = "Select Brainrot" })
+
+if #brainrotNames == 0 then
+	Tabs.Main:Label({ Title = "⚠ No brainrots found! Check the path in console." })
+else
+	Tabs.Main:Dropdown({
+		Title    = "Brainrot  (" .. #brainrotNames .. " found)",
+		Desc     = "From ReplicatedStorage > Assets > Brainrots",
+		List     = brainrotNames,
+		Callback = function(val)
+			selectedBrainrot = val
+			-- Print rarity to console for info
+			local entry = brainrotLookup[val]
+			if entry then
+				print("[Brainrot Spawner] Selected: " .. val .. " | Rarity: " .. entry.rarity)
+			end
+		end,
+	})
+end
+
+Tabs.Main:Section({ Title = "Level" })
+
+Tabs.Main:Input({
+	Title       = "Level",
+	Desc        = "Enter the brainrot level",
+	Placeholder = "e.g. 50",
+	Callback    = function(val)
+		levelValue = val
+	end,
+})
+
+Tabs.Main:Section({ Title = "Actions" })
+
+Tabs.Main:Button({
+	Title    = "Spawn Brainrot",
+	Desc     = "Clones brainrot into Workspace > Brainrots",
+	Callback = function()
+		if selectedBrainrot == "" then
+			showNotification("No Brainrot", "Please select a brainrot first!")
+			return
+		end
+		if levelValue == "" or not tonumber(levelValue) then
+			showNotification("Invalid Level", "Level must be a valid number!")
+			return
+		end
+
+		local success, message = spawnBrainrot(selectedBrainrot, levelValue)
+
+		if success then
+			showNotification("✓ Spawned!", message)
+		else
+			showNotification("✗ Error", message)
+		end
+	end,
+})
+
+Tabs.Main:Button({
+	Title    = "Clear All Brainrots",
+	Desc     = "Removes everything in Workspace > Brainrots",
+	Callback = function()
+		local folder = Workspace:FindFirstChild("Brainrots")
+		if folder then
+			folder:ClearAllChildren()
+			showNotification("Cleared", "All brainrots removed from Workspace!")
+		else
+			showNotification("Nothing to Clear", "No Brainrots folder found.")
+		end
+	end,
+})
+
+-- =====================================================
+-- INFO TAB
+-- =====================================================
+Tabs.Info:Section({ Title = "How to Use" })
+Tabs.Info:Label({ Title = "1. Pick a brainrot from the dropdown" })
+Tabs.Info:Label({ Title = "2. Enter the level you want" })
+Tabs.Info:Label({ Title = "3. Press Spawn Brainrot" })
+Tabs.Info:Label({ Title = "4. Find it in Workspace > Brainrots via Dex" })
+
+Tabs.Info:Section({ Title = "Path Used" })
+Tabs.Info:Label({ Title = "ReplicatedStorage > Assets > Brainrots > [Rarity] > [Brainrot]" })
+
+Tabs.Info:Section({ Title = "Notes" })
+Tabs.Info:Label({ Title = "Rarity is shown in console when selecting a brainrot" })
+Tabs.Info:Label({ Title = "Level is stored as an attribute on the model" })
+Tabs.Info:Label({ Title = "Cloning may fail if the asset is server-protected" })
