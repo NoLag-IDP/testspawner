@@ -1,0 +1,290 @@
+-- Escape Tsunami - Brainrot Spawner (Rayfield)
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- SCAN BRAINROTS
+-- Path: ReplicatedStorage > Assets > Brainrots > [Rarity] > [Brainrot]
+local brainrotLookup = {}
+local brainrotNames  = {}
+
+local function scanBrainrots()
+	brainrotLookup = {}
+	brainrotNames  = {}
+
+	local assetsFolder = ReplicatedStorage:WaitForChild("Assets", 5)
+	if not assetsFolder then
+		warn("[Spawner] ReplicatedStorage.Assets not found!")
+		return
+	end
+
+	local brainrotsFolder = assetsFolder:WaitForChild("Brainrots", 5)
+	if not brainrotsFolder then
+		warn("[Spawner] ReplicatedStorage.Assets.Brainrots not found!")
+		return
+	end
+
+	for _, rarityFolder in ipairs(brainrotsFolder:GetChildren()) do
+		if rarityFolder:IsA("Folder") then
+			for _, brainrot in ipairs(rarityFolder:GetChildren()) do
+				local name = brainrot.Name
+				if not brainrotLookup[name] then
+					brainrotLookup[name] = { rarity = rarityFolder.Name, object = brainrot }
+					table.insert(brainrotNames, name)
+					print("[Spawner] Found: " .. name .. " (" .. rarityFolder.Name .. ")")
+				end
+			end
+		end
+	end
+
+	table.sort(brainrotNames)
+	print("[Spawner] Total: " .. #brainrotNames .. " brainrots")
+end
+
+scanBrainrots()
+
+-- Fallback if scan finds nothing
+if #brainrotNames == 0 then
+	warn("[Spawner] Using fallback list")
+	brainrotNames = {
+		"Tralalero Tralala",
+		"Bombardiro Crocodilo",
+		"Tung Tung Tung Sahur",
+		"Brr Brr Patapim",
+		"Cappuccino Assassino",
+		"Lirili Larila",
+		"Glorbo Fruttodrillo",
+		"Ballerina Cappuccina",
+	}
+	for _, n in ipairs(brainrotNames) do
+		brainrotLookup[n] = { rarity = "Unknown", object = nil }
+	end
+end
+
+-- SPAWN LOGIC
+local function getOrCreateFolder()
+	local f = Workspace:FindFirstChild("Brainrots")
+	if not f then
+		f = Instance.new("Folder")
+		f.Name = "Brainrots"
+		f.Parent = Workspace
+	end
+	return f
+end
+
+local function spawnBrainrot(name, level)
+	if not name or name == "" then return false, "No brainrot selected!" end
+
+	local lvl = tonumber(level)
+	if not lvl or lvl < 1 then return false, "Level must be a number (min 1)!" end
+
+	local entry = brainrotLookup[name]
+	if not entry then return false, "Brainrot not found: " .. tostring(name) end
+
+	local folder = getOrCreateFolder()
+	local cloned = nil
+
+	if entry.object then
+		pcall(function() entry.object.Archivable = true end)
+		for _, v in ipairs(entry.object:GetDescendants()) do
+			pcall(function() v.Archivable = true end)
+		end
+		local ok, result = pcall(function() return entry.object:Clone() end)
+		if ok and result then
+			cloned = result
+		end
+	end
+
+	-- Placeholder if clone failed
+	if not cloned then
+		cloned = Instance.new("Model")
+		local part = Instance.new("Part")
+		part.Name = "HumanoidRootPart"
+		part.Size = Vector3.new(2, 2, 1)
+		part.BrickColor = BrickColor.Random()
+		part.Anchored = true
+		part.Parent = cloned
+		cloned.PrimaryPart = part
+	end
+
+	-- Position near player
+	local spawnPos = Vector3.new(math.random(-20, 20), 5, math.random(-20, 20))
+	local char = Players.LocalPlayer.Character
+	if char and char.PrimaryPart then
+		local cp = char.PrimaryPart.Position
+		spawnPos = Vector3.new(
+			cp.X + math.random(-8, 8),
+			cp.Y + 2,
+			cp.Z + math.random(-8, 8)
+		)
+	end
+
+	pcall(function()
+		if cloned:IsA("Model") and cloned.PrimaryPart then
+			cloned:PivotTo(CFrame.new(spawnPos))
+		elseif cloned:IsA("BasePart") then
+			cloned.Position = spawnPos
+		end
+	end)
+
+	cloned.Name = name
+	cloned:SetAttribute("Level", lvl)
+	cloned:SetAttribute("Rarity", entry.rarity)
+	cloned.Parent = folder
+
+	-- Billboard nametag
+	local rootPart = nil
+	if cloned:IsA("Model") then
+		rootPart = cloned.PrimaryPart or cloned:FindFirstChildWhichIsA("BasePart")
+	elseif cloned:IsA("BasePart") then
+		rootPart = cloned
+	end
+
+	if rootPart then
+		local existing = rootPart:FindFirstChildOfClass("BillboardGui")
+		if existing then existing:Destroy() end
+
+		local bb = Instance.new("BillboardGui")
+		bb.Size = UDim2.new(0, 200, 0, 50)
+		bb.StudsOffset = Vector3.new(0, 3.5, 0)
+		bb.AlwaysOnTop = true
+		bb.Parent = rootPart
+
+		local nl = Instance.new("TextLabel")
+		nl.Size = UDim2.new(1, 0, 0.55, 0)
+		nl.BackgroundTransparency = 1
+		nl.Text = name
+		nl.Font = Enum.Font.GothamBold
+		nl.TextSize = 14
+		nl.TextColor3 = Color3.fromRGB(255, 255, 255)
+		nl.TextStrokeTransparency = 0
+		nl.Parent = bb
+
+		local il = Instance.new("TextLabel")
+		il.Size = UDim2.new(1, 0, 0.45, 0)
+		il.Position = UDim2.new(0, 0, 0.55, 0)
+		il.BackgroundTransparency = 1
+		il.Text = "Lv." .. lvl .. "  |  " .. entry.rarity
+		il.Font = Enum.Font.Gotham
+		il.TextSize = 11
+		il.TextColor3 = Color3.fromRGB(160, 210, 255)
+		il.TextStrokeTransparency = 0
+		il.Parent = bb
+	end
+
+	return true, "Spawned " .. name .. " (Lv." .. lvl .. ") [" .. entry.rarity .. "]"
+end
+
+-- RAYFIELD WINDOW
+local Window = Rayfield:CreateWindow({
+	Name             = "Brainrot Spawner",
+	LoadingTitle     = "Escape Tsunami",
+	LoadingSubtitle  = "Brainrot Spawner",
+	Theme            = "Default",
+	DisableRayfieldPrompts = true,
+	DisableBuildWarnings   = true,
+	ConfigurationSaving = {
+		Enabled    = false,
+	},
+	KeySystem = false,
+})
+
+local Tab = Window:CreateTab("Spawn", 0)
+
+-- State
+local selectedBrainrot = brainrotNames[1] or ""
+local levelValue = "1"
+
+-- Dropdown — Rayfield uses "Options" and "CurrentOption"
+local BrainrotDropdown = Tab:CreateDropdown({
+	Name            = "Select Brainrot  (" .. #brainrotNames .. " found)",
+	Options         = brainrotNames,
+	CurrentOption   = { brainrotNames[1] },
+	MultipleOptions = false,
+	Flag            = "BrainrotDropdown",
+	Callback        = function(option)
+		-- Rayfield returns a table for CurrentOption
+		if type(option) == "table" then
+			selectedBrainrot = option[1] or ""
+		else
+			selectedBrainrot = option
+		end
+		local entry = brainrotLookup[selectedBrainrot]
+		if entry then
+			print("[Spawner] Selected: " .. selectedBrainrot .. " | Rarity: " .. entry.rarity)
+		end
+	end,
+})
+
+-- Level input
+local LevelInput = Tab:CreateInput({
+	Name        = "Level",
+	CurrentValue = "1",
+	PlaceholderText = "e.g. 50",
+	NumbersOnly = true,
+	Flag        = "LevelInput",
+	Callback    = function(val)
+		levelValue = val
+	end,
+})
+
+-- Spawn button
+Tab:CreateButton({
+	Name     = "Spawn Brainrot",
+	Callback = function()
+		if not selectedBrainrot or selectedBrainrot == "" then
+			Rayfield:Notify({
+				Title   = "No Brainrot",
+				Content = "Pick a brainrot from the dropdown!",
+				Duration = 4,
+			})
+			return
+		end
+		if levelValue == "" or not tonumber(levelValue) then
+			Rayfield:Notify({
+				Title   = "Invalid Level",
+				Content = "Level must be a valid number!",
+				Duration = 4,
+			})
+			return
+		end
+		local ok, msg = spawnBrainrot(selectedBrainrot, levelValue)
+		if ok then
+			Rayfield:Notify({
+				Title   = "Spawned!",
+				Content = msg,
+				Duration = 4,
+			})
+		else
+			Rayfield:Notify({
+				Title   = "Error",
+				Content = msg,
+				Duration = 4,
+			})
+		end
+	end,
+})
+
+-- Clear button
+Tab:CreateButton({
+	Name     = "Clear All Brainrots",
+	Callback = function()
+		local folder = Workspace:FindFirstChild("Brainrots")
+		if folder then
+			folder:ClearAllChildren()
+			Rayfield:Notify({
+				Title   = "Cleared",
+				Content = "All brainrots removed from Workspace!",
+				Duration = 4,
+			})
+		else
+			Rayfield:Notify({
+				Title   = "Nothing to Clear",
+				Content = "No Brainrots folder found.",
+				Duration = 4,
+			})
+		end
+	end,
+})
